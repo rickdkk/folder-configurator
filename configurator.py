@@ -6,6 +6,7 @@ from typing import Optional
 import owncloud
 import qdarkstyle
 import pandas as pd
+import requests.exceptions
 from PySide2.QtCore import Qt
 from PySide2.QtGui import QIcon
 from PySide2.QtWidgets import QApplication, QDialog, QFileDialog
@@ -33,7 +34,7 @@ HTTP_RESPONSES = {100: "Continue",
                   }  # not all responses, but these are most common for this application
 
 
-def load_directories(path: str) -> list:
+def load_directories(path: str) -> list[str]:
     """Reads directory structure file and parses input."""
     df: pd.DataFrame = pd.read_excel(path, header=None)
     df = df.fillna("")
@@ -42,22 +43,15 @@ def load_directories(path: str) -> list:
         if not idx:
             continue
         previous = df.iloc[:, idx - 1]
-        if not all(previous.str.endswith("/")):
-            previous += "/"
-        df[col] = previous + df[col]
-
-    if not all(df.iloc[:, -1].str.endswith("/")):
-        df.iloc[:, -1] += "/"
-
-    for col in df:
+        df[col] = previous + "/" + df[col] + "/"
         df[col] = df[col].str.replace(r"\/{2,}", "/", regex=True)  # remove duplicate slashes
 
     directories = [df[col].unique().tolist() for col in df]
-    directories = [item for directory in directories for item in directory]  # flattened and in hierarchical order
-    return directories
+    return [item for directory in directories for item in directory]  # flattened and in hierarchical order
 
 
 def is_email(string: str) -> bool:
+    """Fairly naive check to test if something is an email adres."""
     return bool(re.match(r"[^@]+@[^@]+\.[^@]+", string))
 
 
@@ -65,13 +59,13 @@ class Form(Ui_Dialog, QDialog):
     def __init__(self, app):
         super(Form, self).__init__()
         self.setupUi(self)
-        self.setWindowIcon(QIcon(self.resource_path("configurator_logo.ico")))
+        self.setWindowIcon(QIcon(self._resource_path("configurator_logo.ico")))
         self.setWindowTitle("Configurator")
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
 
+        self.app = app  # needs to be aware of its app, so we can force redraws of the UI
         self.owncloud_client = owncloud.Client(FRD_URL)
-        self.directories = None
-        self.app = app  # needs to be aware of its app so we can force redraws of the UI
+        self.directories: list[str] = []
 
         self.display("Starting automatic folder configurator script. Please login to Fontys Research Drive with your"
                      " username and WebDAV password.", append=False)
@@ -96,19 +90,22 @@ class Form(Ui_Dialog, QDialog):
         self.line_password.setText(string)
 
     def read_environment(self):
+        """Try to find a .env file with an Owncloud username and password."""
         load_dotenv()
         self.username = os.getenv("OWNCLOUD_USERNAME", "")
         self.password = os.getenv("WEBDAV_PASSWORD", "")
 
     def setup_connections(self):
+        """Connect all buttons to their respective functions."""
         self.btn_login.clicked.connect(self.login)
         self.btn_save.clicked.connect(self.save)
         self.btn_load.clicked.connect(self.load)
         self.btn_doit.clicked.connect(self.doit)
 
     def login(self):
+        """Attempt to login to Owncloud with the credentials in the text fields."""
         self.btn_login.setEnabled(False)
-        self.display(f"\nSetting up owncloud connection to {FRD_URL}...")
+        self.display(f"\nSetting up Owncloud connection to {FRD_URL}...")
 
         try:
             self.owncloud_client.login(self.username, self.password)
@@ -117,6 +114,10 @@ class Form(Ui_Dialog, QDialog):
             self.display(f"<p style='color:red'>Login returned the following HTTP error {code} "
                          f"({HTTP_RESPONSES.get(code, '')})<p>")
             self.display("Please try again...")
+            self.btn_login.setEnabled(True)
+            return
+        except requests.exceptions.ConnectionError:
+            self.display("Connection error, please check your internet!")
             self.btn_login.setEnabled(True)
             return
 
@@ -128,6 +129,7 @@ class Form(Ui_Dialog, QDialog):
         self.btn_load.setEnabled(True)
 
     def save(self):
+        """Export credentials to a .env file in the working directory."""
         with open(".env", "w") as file:
             file.write(f"OWNCLOUD_USERNAME='{self.username}'\n")
             file.write(f"WEBDAV_PASSWORD='{self.password}'\n")
@@ -135,10 +137,12 @@ class Form(Ui_Dialog, QDialog):
         self.btn_save.setEnabled(False)
 
     def load(self):
+        """Load spreadsheet file with directory structure."""
         self.btn_load.setEnabled(False)
 
         filename = QFileDialog.getOpenFileName(filter="Spreadsheets(*.ods *.xlsx)")[0]
         if not filename:
+            self.btn_load.setEnabled(True)
             return
 
         self.display(f"\nLoading directory structure from '{os.path.basename(filename)}'...")
@@ -146,18 +150,30 @@ class Form(Ui_Dialog, QDialog):
             self.directories = load_directories(filename)
         except Exception:  # noqa
             self.display("<p style='color:red'>Could not parse file, please check the contents...<p>")
+            self.btn_load.setEnabled(True)
             return
         self.display("Loaded path structure!")
 
+        contains_emails = False
         self.display("\nThe following directories will be created:")
         for directory in self.directories:
-            self.display(directory)
-        self.display("\nIf you agree to create these directories click <b>doit</b>!")
+            email_adres = self._get_email(directory)
+            if email_adres is not None:
+                contains_emails = True
+                self.display(directory + " >>> will be shared with >>> " + email_adres)
+            else:
+                self.display(directory)
+
+        if contains_emails:
+            self.display("\nIf you agree to create these directories and share them, click <b>doit</b>!")
+        else:
+            self.display("\nIf you agree to create these directories, click <b>doit</b>!")
 
         self.btn_load.setEnabled(True)
         self.btn_doit.setEnabled(True)
 
     def doit(self):
+        """Create directories and make shares."""
         self.btn_doit.setEnabled(False)
         self.btn_load.setEnabled(False)
         self.btn_save.setEnabled(False)
@@ -167,6 +183,13 @@ class Form(Ui_Dialog, QDialog):
                 self.display(f"Creating '{directory}'...")
                 self.owncloud_client.mkdir(directory)
                 self.display(" Done!", append=False)
+
+                email = self._get_email(directory)
+                if email is not None:
+                    self.display("Sharing with {email}.")
+                    self.owncloud_client.share_file_with_user(directory, email)
+                    self.display(" Done!", append=False)
+
             except owncloud.HTTPResponseError as e:
                 code = e.status_code
                 self.display(f"<p style='color:red'>Failed with HTTP error {code} ({HTTP_RESPONSES.get(code, '')}),"
@@ -178,6 +201,7 @@ class Form(Ui_Dialog, QDialog):
         self.btn_save.setEnabled(True)
 
     def display(self, text: str, append: bool = True):
+        """Display an HTML message in the text box."""
         if append:
             self.text_browser.insertHtml("<br>" + text.replace("\n", "<br><br>"))
         else:
@@ -187,14 +211,16 @@ class Form(Ui_Dialog, QDialog):
 
     @staticmethod
     def _get_email(string: str) -> Optional[str]:
-        return
+        """Extract email from path. Assumes the recipient is the last element."""
+        leaf = string.split("/")[0]
+        if is_email(leaf):
+            return leaf
 
     @staticmethod
-    def resource_path(relative_path):
-        """ Get absolute path to resource, works for dev and for PyInstaller """
+    def _resource_path(relative_path):
+        """Get absolute path to resource, works for dev and for PyInstaller."""
         try:
-            # PyInstaller creates a temp folder and stores path in _MEIPASS
-            base_path = sys._MEIPASS  # noqa
+            base_path = sys._MEIPASS  # noqa, PyInstaller creates a temp folder and stores path in _MEIPASS
         except AttributeError:
             base_path = os.path.abspath(".")
         return os.path.join(base_path, relative_path)
