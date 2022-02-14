@@ -4,13 +4,13 @@ import sys
 from typing import Optional
 
 import owncloud
-import qdarkstyle
 import pandas as pd
-import requests.exceptions
+import qdarkstyle
 from PySide2.QtCore import Qt
 from PySide2.QtGui import QIcon
 from PySide2.QtWidgets import QApplication, QDialog, QFileDialog
 from dotenv import load_dotenv
+from requests.exceptions import ConnectionError
 
 from dialog import Ui_Dialog
 
@@ -116,8 +116,8 @@ class Form(Ui_Dialog, QDialog):
             self.display("Please try again...")
             self.btn_login.setEnabled(True)
             return
-        except requests.exceptions.ConnectionError:
-            self.display("Connection error, please check your internet!")
+        except ConnectionError:
+            self.display("<p style='color:red'>Connection error, please check your internet!</p>")
             self.btn_login.setEnabled(True)
             return
 
@@ -133,7 +133,8 @@ class Form(Ui_Dialog, QDialog):
         with open(".env", "w") as file:
             file.write(f"OWNCLOUD_USERNAME='{self.username}'\n")
             file.write(f"WEBDAV_PASSWORD='{self.password}'\n")
-        self.display("\nSaved username and password to .env\n")
+        self.display("\nSaved username and password to <b>.env</b> in your working directory. Make sure to keep "
+                     "this file safe!\n")
         self.btn_save.setEnabled(False)
 
     def load(self):
@@ -155,14 +156,13 @@ class Form(Ui_Dialog, QDialog):
         self.display("Loaded path structure!")
 
         contains_emails = False
-        self.display("\nThe following directories will be created:")
+        self.display("\nThe following directories/shares will be created:")
         for directory in self.directories:
             email_adres = self._get_email(directory)
+            self.display(directory)
             if email_adres is not None:
                 contains_emails = True
-                self.display(directory + " >>> will be shared with >>> " + email_adres)
-            else:
-                self.display(directory)
+                self.display(f"&nbsp;>>> {email_adres}", append=False)
 
         if contains_emails:
             self.display("\nIf you agree to create these directories and share them, click <b>doit</b>!")
@@ -182,18 +182,22 @@ class Form(Ui_Dialog, QDialog):
             try:  # owncloud package does not support the webDAV check command, so we'll have to yolo it
                 self.display(f"Creating '{directory}'...")
                 self.owncloud_client.mkdir(directory)
-                self.display(" Done!", append=False)
-
-                email = self._get_email(directory)
-                if email is not None:
-                    self.display("Sharing with {email}.")
-                    self.owncloud_client.share_file_with_user(directory, email)
-                    self.display(" Done!", append=False)
+                self.display("&nbsp;Done!", append=False)
 
             except owncloud.HTTPResponseError as e:
                 code = e.status_code
-                self.display(f"<p style='color:red'>Failed with HTTP error {code} ({HTTP_RESPONSES.get(code, '')}),"
-                             f" possibly already exists.</p>", append=False)
+                self.display(f"<p style='color:red'>&nbsp;Failed with HTTP error {code} "
+                             f"({HTTP_RESPONSES.get(code, '...')}), possibly already exists.</p>", append=False)
+            try:
+                email = self._get_email(directory)
+                if email is not None:
+                    self.display(f"Sharing with {email}...")
+                    self.owncloud_client.share_file_with_user(directory, email,
+                                                              perms=self.owncloud_client.OCS_PERMISSION_ALL)
+                    self.display("&nbsp;Done!", append=False)
+            except Exception:  # noqa
+                self.display("<p style='color:red'>&nbsp;Sharing failed...</p>", append=False)
+
         self.display("<br><b>Finished!</b>")
 
         self.btn_doit.setEnabled(True)
@@ -212,7 +216,7 @@ class Form(Ui_Dialog, QDialog):
     @staticmethod
     def _get_email(string: str) -> Optional[str]:
         """Extract email from path. Assumes the recipient is the last element."""
-        leaf = string.split("/")[0]
+        leaf = string.split("/")[-2]
         if is_email(leaf):
             return leaf
 
