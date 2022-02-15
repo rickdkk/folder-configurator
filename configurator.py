@@ -6,8 +6,8 @@ from typing import Optional
 import owncloud
 import pandas as pd
 import qdarkstyle
-from PySide2.QtCore import Qt
-from PySide2.QtGui import QIcon
+from PySide2.QtCore import Qt, Slot
+from PySide2.QtGui import QIcon, QGuiApplication
 from PySide2.QtWidgets import QApplication, QDialog, QFileDialog
 from dotenv import load_dotenv
 from requests.exceptions import ConnectionError
@@ -40,14 +40,14 @@ def load_directories(path: str) -> list[str]:
     df = df.fillna("")
 
     for idx, col in enumerate(df):
-        if not idx:
-            continue
-        previous = df.iloc[:, idx - 1]
-        df[col] = previous + "/" + df[col] + "/"
-        df[col] = df[col].str.replace(r"\/{2,}", "/", regex=True)  # remove duplicate slashes
+        df[col] += "/"
+        if idx:  # skip the first column
+            df[col] = df.iloc[:, idx - 1] + df[col]
+        df[col] = df[col].str.replace(r"\/{2,}", "/", regex=True)
 
     directories = [df[col].unique().tolist() for col in df]
-    return [item for directory in directories for item in directory]  # flattened and in hierarchical order
+    directories = [item for directory in directories for item in directory]  # flattened and in hierarchical order
+    return list(dict.fromkeys(directories))  # deduplicate between columns while preserving order
 
 
 def is_email(string: str) -> bool:
@@ -55,22 +55,21 @@ def is_email(string: str) -> bool:
     return bool(re.match(r"[^@]+@[^@]+\.[^@]+", string))
 
 
-class Form(Ui_Dialog, QDialog):
-    def __init__(self, app):
-        super(Form, self).__init__()
+class Configurator(Ui_Dialog, QDialog):
+    def __init__(self):
+        super(Configurator, self).__init__()
         self.setupUi(self)
         self.setWindowIcon(QIcon(self._resource_path("configurator_logo.ico")))
         self.setWindowTitle("Configurator")
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
 
-        self.app = app  # needs to be aware of its app, so we can force redraws of the UI
         self.owncloud_client = owncloud.Client(FRD_URL)
         self.directories: list[str] = []
 
         self.display("Starting automatic folder configurator script. Please login to Fontys Research Drive with your"
                      " username and WebDAV password.", append=False)
 
-        self.read_environment()
+        self.load_credentials()
         self.setup_connections()
 
     @property
@@ -89,19 +88,20 @@ class Form(Ui_Dialog, QDialog):
     def password(self, string: str):
         self.line_password.setText(string)
 
-    def read_environment(self):
+    def load_credentials(self):
         """Try to find a .env file with an Owncloud username and password."""
         load_dotenv()
         self.username = os.getenv("OWNCLOUD_USERNAME", "")
         self.password = os.getenv("WEBDAV_PASSWORD", "")
 
     def setup_connections(self):
-        """Connect all buttons to their respective functions."""
+        """Connect all button signals to their respective slots."""
         self.btn_login.clicked.connect(self.login)
-        self.btn_save.clicked.connect(self.save)
+        self.btn_save.clicked.connect(self.save_credentials)
         self.btn_load.clicked.connect(self.load)
         self.btn_doit.clicked.connect(self.doit)
 
+    @Slot()
     def login(self):
         """Attempt to login to Owncloud with the credentials in the text fields."""
         self.btn_login.setEnabled(False)
@@ -128,7 +128,8 @@ class Form(Ui_Dialog, QDialog):
         self.btn_save.setEnabled(True)
         self.btn_load.setEnabled(True)
 
-    def save(self):
+    @Slot()
+    def save_credentials(self):
         """Export credentials to a .env file in the working directory."""
         with open(".env", "w") as file:
             file.write(f"OWNCLOUD_USERNAME='{self.username}'\n")
@@ -137,6 +138,7 @@ class Form(Ui_Dialog, QDialog):
                      "this file safe!\n")
         self.btn_save.setEnabled(False)
 
+    @Slot()
     def load(self):
         """Load spreadsheet file with directory structure."""
         self.btn_load.setEnabled(False)
@@ -165,13 +167,14 @@ class Form(Ui_Dialog, QDialog):
                 self.display(f"&nbsp;>>> {email_adres}", append=False)
 
         if contains_emails:
-            self.display("\nIf you agree to create these directories and share them, click <b>doit</b>!")
+            self.display("\nIf you agree to create these directories and share them, click <b>doit</b>!\n")
         else:
-            self.display("\nIf you agree to create these directories, click <b>doit</b>!")
+            self.display("\nIf you agree to create these directories, click <b>doit</b>!\n")
 
         self.btn_load.setEnabled(True)
         self.btn_doit.setEnabled(True)
 
+    @Slot()
     def doit(self):
         """Create directories and make shares."""
         self.btn_doit.setEnabled(False)
@@ -183,7 +186,6 @@ class Form(Ui_Dialog, QDialog):
                 self.display(f"Creating '{directory}'...")
                 self.owncloud_client.mkdir(directory)
                 self.display("&nbsp;Done!", append=False)
-
             except owncloud.HTTPResponseError as e:
                 code = e.status_code
                 self.display(f"<p style='color:red'>&nbsp;Failed with HTTP error {code} "
@@ -191,7 +193,7 @@ class Form(Ui_Dialog, QDialog):
             try:
                 email = self._get_email(directory)
                 if email is not None:
-                    self.display(f"Sharing with {email}...")
+                    self.display(f">>> Sharing with {email}...")
                     self.owncloud_client.share_file_with_user(directory, email,
                                                               perms=self.owncloud_client.OCS_PERMISSION_ALL)
                     self.display("&nbsp;Done!", append=False)
@@ -204,30 +206,41 @@ class Form(Ui_Dialog, QDialog):
         self.btn_load.setEnabled(True)
         self.btn_save.setEnabled(True)
 
-    def display(self, text: str, append: bool = True):
-        """Display an HTML message in the text box."""
+    def display(self, html: str, append: bool = True):
+        """Display an HTML message in the text browser."""
         if append:
-            self.text_browser.insertHtml("<br>" + text.replace("\n", "<br><br>"))
+            self.text_browser.insertHtml("<br>" + html.replace("\n", "<br><br>"))
         else:
-            self.text_browser.insertHtml(text)
+            self.text_browser.insertHtml(html)
         self.text_browser.ensureCursorVisible()  # scroll all the way to the bottom
-        self.app.processEvents()  # make sure to redraw UI, note that this also processes events (duh)
+        QGuiApplication.processEvents()  # make sure to redraw UI, note that this also processes events (duh)
 
     @staticmethod
     def _get_email(string: str) -> Optional[str]:
         """Extract email from path. Assumes the recipient is the last element."""
-        leaf = string.split("/")[-2]
+        if "/" not in string:
+            return
+        leafs = string.split("/")
+
+        if not len(leafs) >= 2:
+            return
+
+        leaf = leafs[-2]
         if is_email(leaf):
             return leaf
 
     @staticmethod
     def _resource_path(relative_path):
-        """Get absolute path to resource, works for dev and for PyInstaller."""
+        """Get absolute path to resource, works for dev and PyInstaller."""
         try:
             base_path = sys._MEIPASS  # noqa, PyInstaller creates a temp folder and stores path in _MEIPASS
         except AttributeError:
             base_path = os.path.abspath(".")
         return os.path.join(base_path, relative_path)
+
+    def closeEvent(self, _) -> None:
+        """Quit the Python proces after the user clicks exit."""
+        sys.exit()
 
 
 def main():
@@ -236,7 +249,7 @@ def main():
     app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyside2'))
 
     # create the application form
-    form = Form(app)
+    form = Configurator()
     form.show()
 
     sys.exit(app.exec_())
