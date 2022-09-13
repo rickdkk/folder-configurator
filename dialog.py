@@ -1,17 +1,23 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Configurator generated from reading UI file 'dialog.ui'
+## Form generated from reading UI file 'dialog.ui'
 ##
-## Created by: Qt User Interface Compiler version 5.15.2
+## Created by: Qt User Interface Compiler version 6.3.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-from PySide2.QtCore import *
-from PySide2.QtGui import *
-from PySide2.QtWidgets import *
-
+from PySide6.QtCore import (QCoreApplication, QDate, QDateTime, QLocale,
+    QMetaObject, QObject, QPoint, QRect,
+    QSize, QTime, QUrl, Qt)
+from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
+    QFont, QFontDatabase, QGradient, QIcon,
+    QImage, QKeySequence, QLinearGradient, QPainter,
+    QPalette, QPixmap, QRadialGradient, QTransform)
+from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QFormLayout,
+    QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QSizePolicy, QTextBrowser, QVBoxLayout, QWidget)
 
 class Ui_Dialog(object):
     def setupUi(self, Dialog):
@@ -69,6 +75,18 @@ class Ui_Dialog(object):
 
         self.horizontalLayout_3.addWidget(self.btn_load)
 
+        self.box_permission = QComboBox(Dialog)
+        self.box_permission.addItem("")
+        self.box_permission.addItem("")
+        self.box_permission.addItem("")
+        self.box_permission.addItem("")
+        self.box_permission.addItem("")
+        self.box_permission.addItem("")
+        self.box_permission.addItem("")
+        self.box_permission.setObjectName(u"box_permission")
+
+        self.horizontalLayout_3.addWidget(self.box_permission)
+
 
         self.verticalLayout.addLayout(self.horizontalLayout_3)
 
@@ -90,19 +108,25 @@ class Ui_Dialog(object):
 
         self.retranslateUi(Dialog)
 
+        self.box_permission.setCurrentIndex(6)
+
+
         QMetaObject.connectSlotsByName(Dialog)
     # setupUi
 
     def retranslateUi(self, Dialog):
-        Dialog.setWindowTitle(QCoreApplication.translate("Dialog", u"Dialog", None))
+        Dialog.setWindowTitle(QCoreApplication.translate("Dialog", u"Configurator", None))
 #if QT_CONFIG(tooltip)
         self.lbl_username.setToolTip(QCoreApplication.translate("Dialog", u"Username for FRD", None))
 #endif // QT_CONFIG(tooltip)
         self.lbl_username.setText(QCoreApplication.translate("Dialog", u"Username", None))
+        self.line_username.setInputMask("")
+        self.line_username.setPlaceholderText(QCoreApplication.translate("Dialog", u"username@domain.nl", None))
 #if QT_CONFIG(tooltip)
         self.lbl_password.setToolTip(QCoreApplication.translate("Dialog", u"WebDAV password for FRD", None))
 #endif // QT_CONFIG(tooltip)
         self.lbl_password.setText(QCoreApplication.translate("Dialog", u"Password", None))
+        self.line_password.setPlaceholderText(QCoreApplication.translate("Dialog", u"ABCDE-FGHIJK-LMNOP-QRSTU", None))
 #if QT_CONFIG(tooltip)
         self.btn_login.setToolTip(QCoreApplication.translate("Dialog", u"Log in to Fontys Research Drive", None))
 #endif // QT_CONFIG(tooltip)
@@ -115,6 +139,20 @@ class Ui_Dialog(object):
         self.btn_load.setToolTip(QCoreApplication.translate("Dialog", u"Load folder structure from spreadsheet file", None))
 #endif // QT_CONFIG(tooltip)
         self.btn_load.setText(QCoreApplication.translate("Dialog", u"Load", None))
+        self.box_permission.setItemText(0, QCoreApplication.translate("Dialog", u"Read", None))
+        self.box_permission.setItemText(1, QCoreApplication.translate("Dialog", u"Update", None))
+        self.box_permission.setItemText(2, QCoreApplication.translate("Dialog", u"Create", None))
+        self.box_permission.setItemText(3, QCoreApplication.translate("Dialog", u"Delete", None))
+        self.box_permission.setItemText(4, QCoreApplication.translate("Dialog", u"Read/write", None))
+        self.box_permission.setItemText(5, QCoreApplication.translate("Dialog", u"Share", None))
+        self.box_permission.setItemText(6, QCoreApplication.translate("Dialog", u"All permissions", None))
+
+#if QT_CONFIG(tooltip)
+        self.box_permission.setToolTip(QCoreApplication.translate("Dialog", u"Permission level of the shares", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(statustip)
+        self.box_permission.setStatusTip("")
+#endif // QT_CONFIG(statustip)
 #if QT_CONFIG(tooltip)
         self.btn_doit.setToolTip(QCoreApplication.translate("Dialog", u"Try to make folders on FRD", None))
 #endif // QT_CONFIG(tooltip)

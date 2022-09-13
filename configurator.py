@@ -6,13 +6,22 @@ from typing import Optional
 import owncloud
 import pandas as pd
 import qdarkstyle
-from PySide2.QtCore import Qt, Slot
-from PySide2.QtGui import QIcon, QGuiApplication
-from PySide2.QtWidgets import QApplication, QDialog, QFileDialog
+from PySide6.QtCore import Qt, Slot
+from PySide6.QtGui import QIcon, QGuiApplication
+from PySide6.QtWidgets import QApplication, QDialog, QFileDialog
 from dotenv import load_dotenv
 from requests.exceptions import ConnectionError
 
 from dialog import Ui_Dialog
+
+__version__ = 0.4
+
+try:
+    from ctypes import windll  # Only exists on Windows.
+    myappid = f'fontys.configurator.{__version__}'
+    windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+except ImportError:
+    pass
 
 FRD_URL = 'https://fontys.data.surfsara.nl/'
 
@@ -59,7 +68,7 @@ class Configurator(Ui_Dialog, QDialog):
     def __init__(self):
         super(Configurator, self).__init__()
         self.setupUi(self)
-        self.setWindowIcon(QIcon(self._resource_path("configurator_logo.ico")))
+        self.setWindowIcon(QIcon(":/icons/configurator_logo.ico"))
         self.setWindowTitle("Configurator")
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
 
@@ -229,15 +238,6 @@ class Configurator(Ui_Dialog, QDialog):
         if is_email(leaf):
             return leaf
 
-    @staticmethod
-    def _resource_path(relative_path):
-        """Get absolute path to resource, works for dev and PyInstaller."""
-        try:
-            base_path = sys._MEIPASS  # noqa, PyInstaller creates a temp folder and stores path in _MEIPASS
-        except AttributeError:
-            base_path = os.path.abspath(".")
-        return os.path.join(base_path, relative_path)
-
     def closeEvent(self, _) -> None:
         """Quit the Python proces after the user clicks exit."""
         sys.exit()
@@ -246,13 +246,13 @@ class Configurator(Ui_Dialog, QDialog):
 def main():
     # create the application and the main window
     app = QApplication(sys.argv)
-    app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyside2'))
+    app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyside6'))
 
     # create the application form
     form = Configurator()
     form.show()
 
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":

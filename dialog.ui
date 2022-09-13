@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Dialog</string>
+   <string>Configurator</string>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <item>
@@ -44,7 +44,14 @@
         </widget>
        </item>
        <item row="0" column="1">
-        <widget class="QLineEdit" name="line_username"/>
+        <widget class="QLineEdit" name="line_username">
+         <property name="inputMask">
+          <string/>
+         </property>
+         <property name="placeholderText">
+          <string>username@domain.nl</string>
+         </property>
+        </widget>
        </item>
        <item row="1" column="0">
         <widget class="QLabel" name="lbl_password">
@@ -60,6 +67,9 @@
         <widget class="QLineEdit" name="line_password">
          <property name="echoMode">
           <enum>QLineEdit::Password</enum>
+         </property>
+         <property name="placeholderText">
+          <string>ABCDE-FGHIJK-LMNOP-QRSTU</string>
          </property>
         </widget>
        </item>
@@ -103,6 +113,54 @@
          </property>
         </widget>
        </item>
+       <item>
+        <widget class="QComboBox" name="box_permission">
+         <property name="toolTip">
+          <string>Permission level of the shares</string>
+         </property>
+         <property name="statusTip">
+          <string/>
+         </property>
+         <property name="currentIndex">
+          <number>6</number>
+         </property>
+         <item>
+          <property name="text">
+           <string>Read</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Update</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Create</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Delete</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Read/write</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Share</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>All permissions</string>
+          </property>
+         </item>
+        </widget>
+       </item>
       </layout>
      </item>
      <item>
@@ -132,6 +190,8 @@
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="../3f16c4b9/resources.qrc"/>
+ </resources>
  <connections/>
 </ui>
