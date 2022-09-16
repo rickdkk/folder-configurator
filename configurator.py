@@ -6,7 +6,7 @@ from typing import Optional
 import owncloud
 import pandas as pd
 import qdarkstyle
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Slot, QThreadPool
 from PySide6.QtGui import QIcon, QGuiApplication
 from PySide6.QtWidgets import QApplication, QDialog, QFileDialog
 from dotenv import load_dotenv
@@ -14,10 +14,10 @@ from requests.exceptions import ConnectionError
 
 from dialog import Ui_Dialog
 
-__version__ = 0.4
+__version__ = 0.5
 
 try:
-    from ctypes import windll  # Only exists on Windows.
+    from ctypes import windll  # noqa. Only exists on Windows
     myappid = f'fontys.configurator.{__version__}'
     windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 except ImportError:
@@ -42,13 +42,23 @@ HTTP_RESPONSES = {100: "Continue",
                   410: "Gone",
                   }  # not all responses, but these are most common for this application
 
+PERMISSION_LEVELS = {"Read": 1,
+                     "Read/write": 2,
+                     "Create": 4,
+                     "Delete": 8,
+                     "Share": 16,
+                     "All permissions": 31}
+
+DEFAULT_PERMISSION = 31
+
 
 def load_directories(path: str) -> list[str]:
     """Reads directory structure file and parses input."""
-    df: pd.DataFrame = pd.read_excel(path, header=None)
+    df: pd.DataFrame = pd.read_excel(path, header=None)  # noqa
     df = df.fillna("")
 
     for idx, col in enumerate(df):
+        df[col] = df[col].str.strip()  # progress sometimes adds spaces at the end of an email
         df[col] += "/"
         if idx:  # skip the first column
             df[col] = df.iloc[:, idx - 1] + df[col]
@@ -69,11 +79,12 @@ class Configurator(Ui_Dialog, QDialog):
         super(Configurator, self).__init__()
         self.setupUi(self)
         self.setWindowIcon(QIcon(":/icons/configurator_logo.ico"))
-        self.setWindowTitle("Configurator")
+        self.setWindowTitle(f"Configurator - v{__version__}")
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
 
         self.owncloud_client = owncloud.Client(FRD_URL)
         self.directories: list[str] = []
+        self.thread_manager = QThreadPool()
 
         self.display("Starting automatic folder configurator script. Please login to Fontys Research Drive with your"
                      " username and WebDAV password.", append=False)
@@ -108,7 +119,10 @@ class Configurator(Ui_Dialog, QDialog):
         self.btn_login.clicked.connect(self.login)
         self.btn_save.clicked.connect(self.save_credentials)
         self.btn_load.clicked.connect(self.load)
-        self.btn_doit.clicked.connect(self.doit)
+        self.btn_doit.clicked.connect(self.doit_threaded)
+
+    def get_permission_level(self) -> int:
+        return PERMISSION_LEVELS.get(self.box_permission.currentText(), DEFAULT_PERMISSION)
 
     @Slot()
     def login(self):
@@ -132,6 +146,7 @@ class Configurator(Ui_Dialog, QDialog):
 
         self.display(f"Connection established! You are logged in as {self.username}.")
         self.display(f"\nPlease provide a folder configuration spreadsheet file.")
+        
         self.line_username.setEnabled(False)
         self.line_password.setEnabled(False)
         self.btn_save.setEnabled(True)
@@ -184,12 +199,20 @@ class Configurator(Ui_Dialog, QDialog):
         self.btn_doit.setEnabled(True)
 
     @Slot()
-    def doit(self):
-        """Create directories and make shares."""
+    def doit_threaded(self):
         self.btn_doit.setEnabled(False)
         self.btn_load.setEnabled(False)
-        self.btn_save.setEnabled(False)
+        self.box_permission.setEnabled(False)
 
+        self.thread_manager.start(self.doit)
+
+        self.btn_doit.setEnabled(True)
+        self.btn_load.setEnabled(True)
+        self.box_permission.setEnabled(True)
+
+    def doit(self):
+        """Create directories and make shares."""
+        permission_level = self.get_permission_level()
         for directory in self.directories:
             try:  # owncloud package does not support the webDAV check command, so we'll have to yolo it
                 self.display(f"Creating '{directory}'...")
@@ -203,17 +226,12 @@ class Configurator(Ui_Dialog, QDialog):
                 email = self._get_email(directory)
                 if email is not None:
                     self.display(f">>> Sharing with {email}...")
-                    self.owncloud_client.share_file_with_user(directory, email,
-                                                              perms=self.owncloud_client.OCS_PERMISSION_ALL)
+                    self.owncloud_client.share_file_with_user(directory, email, perms=permission_level)
                     self.display("&nbsp;Done!", append=False)
             except Exception:  # noqa
                 self.display("<p style='color:red'>&nbsp;Sharing failed...</p>", append=False)
 
         self.display("<br><b>Finished!</b>")
-
-        self.btn_doit.setEnabled(True)
-        self.btn_load.setEnabled(True)
-        self.btn_save.setEnabled(True)
 
     def display(self, html: str, append: bool = True):
         """Display an HTML message in the text browser."""
@@ -222,7 +240,6 @@ class Configurator(Ui_Dialog, QDialog):
         else:
             self.text_browser.insertHtml(html)
         self.text_browser.ensureCursorVisible()  # scroll all the way to the bottom
-        QGuiApplication.processEvents()  # make sure to redraw UI, note that this also processes events (duh)
 
     @staticmethod
     def _get_email(string: str) -> Optional[str]:
