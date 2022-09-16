@@ -24,8 +24,6 @@ try:
 except ImportError:
     pass
 
-FRD_URL = 'https://fontys.data.surfsara.nl/'
-
 HTTP_RESPONSES = {100: "Continue",
                   101: "Switching Protocols",
                   102: "Processing",
@@ -85,7 +83,7 @@ class Configurator(Ui_Dialog, QDialog):
         self.setWindowTitle(f"Configurator - v{__version__}")
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
 
-        self.owncloud_client = owncloud.Client(FRD_URL)
+        self.owncloud_client = None
         self.directories: list[str] = []
         self.thread_manager = QThreadPool()
 
@@ -141,8 +139,9 @@ class Configurator(Ui_Dialog, QDialog):
     def login(self):
         """Attempt to login to Owncloud with the credentials in the text fields."""
         self.btn_login.setEnabled(False)
-        self.display(f"\nSetting up Owncloud connection to {FRD_URL}...")
+        self.display(f"\nSetting up Owncloud connection to {self.url}...")
 
+        self.owncloud_client = owncloud.Client(self.url)
         try:
             self.owncloud_client.login(self.username, self.password)
         except owncloud.HTTPResponseError as e:
@@ -153,7 +152,7 @@ class Configurator(Ui_Dialog, QDialog):
             self.btn_login.setEnabled(True)
             return
         except ConnectionError:
-            self.display("<p style='color:red'>Connection error, please check your internet!</p>")
+            self.display("<p style='color:red'>Connection error, please check the url and your internet!</p>")
             self.btn_login.setEnabled(True)
             return
 
