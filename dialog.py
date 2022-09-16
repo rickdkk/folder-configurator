@@ -18,6 +18,7 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
 from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QFormLayout,
     QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QSizePolicy, QTextBrowser, QVBoxLayout, QWidget)
+import resources_rc
 
 class Ui_Dialog(object):
     def setupUi(self, Dialog):
@@ -32,26 +33,38 @@ class Ui_Dialog(object):
         self.verticalLayout.setContentsMargins(5, 5, 5, 5)
         self.formLayout = QFormLayout()
         self.formLayout.setObjectName(u"formLayout")
-        self.lbl_username = QLabel(Dialog)
-        self.lbl_username.setObjectName(u"lbl_username")
+        self.formLayout.setHorizontalSpacing(6)
+        self.formLayout.setVerticalSpacing(6)
+        self.line_url = QLineEdit(Dialog)
+        self.line_url.setObjectName(u"line_url")
 
-        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.lbl_username)
+        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.line_url)
+
+        self.lbl_url = QLabel(Dialog)
+        self.lbl_url.setObjectName(u"lbl_url")
+
+        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.lbl_url)
 
         self.line_username = QLineEdit(Dialog)
         self.line_username.setObjectName(u"line_username")
 
-        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.line_username)
+        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.line_username)
 
-        self.lbl_password = QLabel(Dialog)
-        self.lbl_password.setObjectName(u"lbl_password")
+        self.lbl_username = QLabel(Dialog)
+        self.lbl_username.setObjectName(u"lbl_username")
 
-        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.lbl_password)
+        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.lbl_username)
 
         self.line_password = QLineEdit(Dialog)
         self.line_password.setObjectName(u"line_password")
         self.line_password.setEchoMode(QLineEdit.Password)
 
-        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.line_password)
+        self.formLayout.setWidget(2, QFormLayout.FieldRole, self.line_password)
+
+        self.lbl_password = QLabel(Dialog)
+        self.lbl_password.setObjectName(u"lbl_password")
+
+        self.formLayout.setWidget(2, QFormLayout.LabelRole, self.lbl_password)
 
 
         self.verticalLayout.addLayout(self.formLayout)
@@ -105,6 +118,11 @@ class Ui_Dialog(object):
 
         self.horizontalLayout.addLayout(self.verticalLayout)
 
+        QWidget.setTabOrder(self.btn_login, self.btn_save)
+        QWidget.setTabOrder(self.btn_save, self.btn_load)
+        QWidget.setTabOrder(self.btn_load, self.box_permission)
+        QWidget.setTabOrder(self.box_permission, self.text_browser)
+        QWidget.setTabOrder(self.text_browser, self.btn_doit)
 
         self.retranslateUi(Dialog)
 
@@ -116,17 +134,19 @@ class Ui_Dialog(object):
 
     def retranslateUi(self, Dialog):
         Dialog.setWindowTitle(QCoreApplication.translate("Dialog", u"Configurator", None))
+        self.line_url.setPlaceholderText(QCoreApplication.translate("Dialog", u"https://institution.data.surfsara.nl/", None))
+        self.lbl_url.setText(QCoreApplication.translate("Dialog", u"Connect to", None))
+        self.line_username.setInputMask("")
+        self.line_username.setPlaceholderText(QCoreApplication.translate("Dialog", u"username@domain.nl", None))
 #if QT_CONFIG(tooltip)
         self.lbl_username.setToolTip(QCoreApplication.translate("Dialog", u"Username for FRD", None))
 #endif // QT_CONFIG(tooltip)
         self.lbl_username.setText(QCoreApplication.translate("Dialog", u"Username", None))
-        self.line_username.setInputMask("")
-        self.line_username.setPlaceholderText(QCoreApplication.translate("Dialog", u"username@domain.nl", None))
+        self.line_password.setPlaceholderText(QCoreApplication.translate("Dialog", u"ABCDE-FGHIJK-LMNOP-QRSTU", None))
 #if QT_CONFIG(tooltip)
         self.lbl_password.setToolTip(QCoreApplication.translate("Dialog", u"WebDAV password for FRD", None))
 #endif // QT_CONFIG(tooltip)
         self.lbl_password.setText(QCoreApplication.translate("Dialog", u"Password", None))
-        self.line_password.setPlaceholderText(QCoreApplication.translate("Dialog", u"ABCDE-FGHIJK-LMNOP-QRSTU", None))
 #if QT_CONFIG(tooltip)
         self.btn_login.setToolTip(QCoreApplication.translate("Dialog", u"Log in to Fontys Research Drive", None))
 #endif // QT_CONFIG(tooltip)
@@ -148,7 +168,7 @@ class Ui_Dialog(object):
         self.box_permission.setItemText(6, QCoreApplication.translate("Dialog", u"All permissions", None))
 
 #if QT_CONFIG(tooltip)
-        self.box_permission.setToolTip(QCoreApplication.translate("Dialog", u"Permission level of the shares", None))
+        self.box_permission.setToolTip(QCoreApplication.translate("Dialog", u"Permission level of the shares in increasing order", None))
 #endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(statustip)
         self.box_permission.setStatusTip("")

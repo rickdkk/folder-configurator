@@ -142,3 +142,5 @@ cython_debug/
 _build/
 data/
 files/
+docs/
+figures/

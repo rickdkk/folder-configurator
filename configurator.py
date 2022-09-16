@@ -7,7 +7,7 @@ import owncloud
 import pandas as pd
 import qdarkstyle
 from PySide6.QtCore import Qt, Slot, QThreadPool
-from PySide6.QtGui import QIcon, QGuiApplication
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QDialog, QFileDialog
 from dotenv import load_dotenv
 from requests.exceptions import ConnectionError
@@ -108,11 +108,24 @@ class Configurator(Ui_Dialog, QDialog):
     def password(self, string: str):
         self.line_password.setText(string)
 
+    @property
+    def url(self) -> str:
+        return self.line_url.text()
+
+    @url.setter
+    def url(self, string: str):
+        self.line_url.setText(string)
+
+    @property
+    def permission_level(self) -> int:
+        return PERMISSION_LEVELS.get(self.box_permission.currentText(), DEFAULT_PERMISSION)
+
     def load_credentials(self):
         """Try to find a .env file with an Owncloud username and password."""
         load_dotenv()
         self.username = os.getenv("OWNCLOUD_USERNAME", "")
         self.password = os.getenv("WEBDAV_PASSWORD", "")
+        self.url = os.getenv("WEBDAV_URL", "")
 
     def setup_connections(self):
         """Connect all button signals to their respective slots."""
@@ -120,9 +133,6 @@ class Configurator(Ui_Dialog, QDialog):
         self.btn_save.clicked.connect(self.save_credentials)
         self.btn_load.clicked.connect(self.load)
         self.btn_doit.clicked.connect(self.doit_threaded)
-
-    def get_permission_level(self) -> int:
-        return PERMISSION_LEVELS.get(self.box_permission.currentText(), DEFAULT_PERMISSION)
 
     @Slot()
     def login(self):
@@ -149,6 +159,7 @@ class Configurator(Ui_Dialog, QDialog):
         
         self.line_username.setEnabled(False)
         self.line_password.setEnabled(False)
+        self.line_url.setEnabled(False)
         self.btn_save.setEnabled(True)
         self.btn_load.setEnabled(True)
 
@@ -158,7 +169,8 @@ class Configurator(Ui_Dialog, QDialog):
         with open(".env", "w") as file:
             file.write(f"OWNCLOUD_USERNAME='{self.username}'\n")
             file.write(f"WEBDAV_PASSWORD='{self.password}'\n")
-        self.display("\nSaved username and password to <b>.env</b> in your working directory. Make sure to keep "
+            file.write(f"WEBDAV_URL='{self.url}'\n")
+        self.display("\nSaved url, username, and password to <b>.env</b> in your working directory. Make sure to keep "
                      "this file safe!\n")
         self.btn_save.setEnabled(False)
 
@@ -167,7 +179,7 @@ class Configurator(Ui_Dialog, QDialog):
         """Load spreadsheet file with directory structure."""
         self.btn_load.setEnabled(False)
 
-        filename = QFileDialog.getOpenFileName(filter="Spreadsheets(*.ods *.xlsx)")[0]
+        filename = QFileDialog.getOpenFileName(filter="Spreadsheets(*.ods *.xlsx)")[0]  # noqa
         if not filename:
             self.btn_load.setEnabled(True)
             return
@@ -200,19 +212,20 @@ class Configurator(Ui_Dialog, QDialog):
 
     @Slot()
     def doit_threaded(self):
+        """Disable buttons and make folders+shares in a new thread so the UI doesn't freeze"""
         self.btn_doit.setEnabled(False)
         self.btn_load.setEnabled(False)
         self.box_permission.setEnabled(False)
 
-        self.thread_manager.start(self.doit)
+        self.thread_manager.start(self._doit)
 
         self.btn_doit.setEnabled(True)
         self.btn_load.setEnabled(True)
         self.box_permission.setEnabled(True)
 
-    def doit(self):
+    def _doit(self):
         """Create directories and make shares."""
-        permission_level = self.get_permission_level()
+        permission_level = self.permission_level
         for directory in self.directories:
             try:  # owncloud package does not support the webDAV check command, so we'll have to yolo it
                 self.display(f"Creating '{directory}'...")
@@ -222,7 +235,7 @@ class Configurator(Ui_Dialog, QDialog):
                 code = e.status_code
                 self.display(f"<p style='color:red'>&nbsp;Failed with HTTP error {code} "
                              f"({HTTP_RESPONSES.get(code, '...')}), possibly already exists.</p>", append=False)
-            try:
+            try:  # make the shares
                 email = self._get_email(directory)
                 if email is not None:
                     self.display(f">>> Sharing with {email}...")
@@ -230,7 +243,6 @@ class Configurator(Ui_Dialog, QDialog):
                     self.display("&nbsp;Done!", append=False)
             except Exception:  # noqa
                 self.display("<p style='color:red'>&nbsp;Sharing failed...</p>", append=False)
-
         self.display("<br><b>Finished!</b>")
 
     def display(self, html: str, append: bool = True):

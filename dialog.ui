@@ -33,17 +33,27 @@
      </property>
      <item>
       <layout class="QFormLayout" name="formLayout">
-       <item row="0" column="0">
-        <widget class="QLabel" name="lbl_username">
-         <property name="toolTip">
-          <string>Username for FRD</string>
-         </property>
-         <property name="text">
-          <string>Username</string>
+       <property name="horizontalSpacing">
+        <number>6</number>
+       </property>
+       <property name="verticalSpacing">
+        <number>6</number>
+       </property>
+       <item row="0" column="1">
+        <widget class="QLineEdit" name="line_url">
+         <property name="placeholderText">
+          <string>https://institution.data.surfsara.nl/</string>
          </property>
         </widget>
        </item>
-       <item row="0" column="1">
+       <item row="0" column="0">
+        <widget class="QLabel" name="lbl_url">
+         <property name="text">
+          <string>Connect to</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
         <widget class="QLineEdit" name="line_username">
          <property name="inputMask">
           <string/>
@@ -54,22 +64,32 @@
         </widget>
        </item>
        <item row="1" column="0">
-        <widget class="QLabel" name="lbl_password">
+        <widget class="QLabel" name="lbl_username">
          <property name="toolTip">
-          <string>WebDAV password for FRD</string>
+          <string>Username for FRD</string>
          </property>
          <property name="text">
-          <string>Password</string>
+          <string>Username</string>
          </property>
         </widget>
        </item>
-       <item row="1" column="1">
+       <item row="2" column="1">
         <widget class="QLineEdit" name="line_password">
          <property name="echoMode">
           <enum>QLineEdit::Password</enum>
          </property>
          <property name="placeholderText">
           <string>ABCDE-FGHIJK-LMNOP-QRSTU</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="lbl_password">
+         <property name="toolTip">
+          <string>WebDAV password for FRD</string>
+         </property>
+         <property name="text">
+          <string>Password</string>
          </property>
         </widget>
        </item>
@@ -116,7 +136,7 @@
        <item>
         <widget class="QComboBox" name="box_permission">
          <property name="toolTip">
-          <string>Permission level of the shares</string>
+          <string>Permission level of the shares in increasing order</string>
          </property>
          <property name="statusTip">
           <string/>
@@ -190,8 +210,16 @@
    </item>
   </layout>
  </widget>
+ <tabstops>
+  <tabstop>btn_login</tabstop>
+  <tabstop>btn_save</tabstop>
+  <tabstop>btn_load</tabstop>
+  <tabstop>box_permission</tabstop>
+  <tabstop>text_browser</tabstop>
+  <tabstop>btn_doit</tabstop>
+ </tabstops>
  <resources>
-  <include location="../3f16c4b9/resources.qrc"/>
+  <include location="../3766a37a/resources.qrc"/>
  </resources>
  <connections/>
 </ui>

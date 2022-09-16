@@ -24,15 +24,15 @@ If you just want to use the software you can grab the executable from GitHub.
 
 Step 1: create folder structure you would like to have in spreadsheet software
 
-![](Figures/01_input.png)
+![](figures/01_input.png)
 
 Step 2: use the folder configurator
 
-![](Figures/02_interface.png)
+![](figures/02_interface.png)
 
 Step 3: profit?
 
-![](Figures/03_result.png)
+![](figures/03_result.png)
 
 In this example the first two folders already exist, so they cannot be generated. The share that fails is to the
 owner of the folder, so that also fails.
