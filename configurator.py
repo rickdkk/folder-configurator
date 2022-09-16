@@ -6,6 +6,7 @@ from typing import Optional
 import owncloud
 import pandas as pd
 import qdarkstyle
+from loguru import logger
 from PySide6.QtCore import Qt, Slot, QThreadPool
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QDialog, QFileDialog
@@ -50,6 +51,8 @@ PERMISSION_LEVELS = {"Read": 1,
                      "All permissions": 31}
 
 DEFAULT_PERMISSION = 31
+
+logger.add("configurator_logs.log")
 
 
 def load_directories(path: str) -> list[str]:
@@ -226,6 +229,7 @@ class Configurator(Ui_Dialog, QDialog):
     def _doit(self):
         """Create directories and make shares."""
         permission_level = self.permission_level
+        email = None
         for directory in self.directories:
             try:  # owncloud package does not support the webDAV check command, so we'll have to yolo it
                 self.display(f"Creating '{directory}'...")
@@ -235,6 +239,7 @@ class Configurator(Ui_Dialog, QDialog):
                 code = e.status_code
                 self.display(f"<p style='color:red'>&nbsp;Failed with HTTP error {code} "
                              f"({HTTP_RESPONSES.get(code, '...')}), possibly already exists.</p>", append=False)
+                logger.warning(f"Failed to create directory: {directory}")
             try:  # make the shares
                 email = self._get_email(directory)
                 if email is not None:
@@ -243,6 +248,7 @@ class Configurator(Ui_Dialog, QDialog):
                     self.display("&nbsp;Done!", append=False)
             except Exception:  # noqa
                 self.display("<p style='color:red'>&nbsp;Sharing failed...</p>", append=False)
+                logger.warning(f"Failed to make share for: {email}")
         self.display("<br><b>Finished!</b>")
 
     def display(self, html: str, append: bool = True):
