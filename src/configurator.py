@@ -7,7 +7,7 @@ import owncloud
 import pandas as pd
 import qdarkstyle
 from loguru import logger
-from PySide6.QtCore import Qt, Slot, QThreadPool
+from PySide6.QtCore import Qt, Slot, QThreadPool, Signal, QRunnable, QObject
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QDialog, QFileDialog
 from dotenv import load_dotenv
@@ -15,7 +15,7 @@ from requests.exceptions import ConnectionError
 
 from dialog import Ui_Dialog
 
-__version__ = 0.5
+__version__ = 0.6
 
 try:
     from ctypes import windll  # noqa. Only exists on Windows
@@ -75,9 +75,67 @@ def is_email(string: str) -> bool:
     return bool(re.match(r"[^@]+@[^@]+\.[^@]+", string))
 
 
+def _get_email(string: str) -> Optional[str]:
+    """Extract email from path. Assumes the recipient is the last element."""
+    if "/" not in string:
+        return
+    leafs = string.split("/")
+
+    if not len(leafs) >= 2:
+        return
+
+    leaf = leafs[-2]
+    if is_email(leaf):
+        return leaf
+
+
+class WorkerSignals(QObject):
+    """Defines the signals available from a running worker thread."""
+    command_completed = Signal(str, bool)
+    finished = Signal()
+
+
+# noinspection PyUnresolvedReferences
+class ConfiguratorWorker(QRunnable):
+    def __init__(self, client: owncloud.Client, directories: list[str], permission_level: int):
+        super(ConfiguratorWorker, self).__init__()
+        self.owncloud_client = client
+        self.directories = directories
+        self.permission_level = permission_level
+        self.signals = WorkerSignals()
+
+    @Slot()
+    def run(self):
+        """Create directories and make shares."""
+        permission_level = self.permission_level
+        email = None
+        for directory in self.directories:
+            try:  # owncloud package does not support the webDAV check command, so we'll have to yolo it
+                self.signals.command_completed.emit(f"Creating '{directory}'...", True)
+                self.owncloud_client.mkdir(directory)
+                self.signals.command_completed.emit("&nbsp;Done!", False)
+            except owncloud.HTTPResponseError as e:
+                code = e.status_code
+                self.signals.command_completed.emit(f"<p style='color:red'>&nbsp;Failed with HTTP error {code} "
+                                                    f"({HTTP_RESPONSES.get(code, '...')}), "
+                                                    f"possibly already exists.</p>", False)
+                logger.warning(f"Failed to create directory: {directory}")
+            try:  # make the shares
+                email = _get_email(directory)
+                if email is not None:
+                    self.signals.command_completed.emit(f">>> Sharing with {email}...", True)
+                    self.owncloud_client.share_file_with_user(directory, email, perms=permission_level)
+                    self.signals.command_completed.emit("&nbsp;Done!", False)
+            except Exception:  # noqa
+                self.signals.command_completed.emit("<p style='color:red'>&nbsp;Sharing failed...</p>", False)
+                logger.warning(f"Failed to create share for: {email}")
+        self.signals.command_completed.emit("<br><b>Finished!</b>", True)
+        self.signals.finished.emit()
+
+
 class Configurator(Ui_Dialog, QDialog):
     def __init__(self):
-        super(Configurator, self).__init__()
+        super().__init__()
         self.setupUi(self)
         self.setWindowIcon(QIcon(":/icons/configurator_logo.ico"))
         self.setWindowTitle(f"Configurator - v{__version__}")
@@ -85,10 +143,10 @@ class Configurator(Ui_Dialog, QDialog):
 
         self.owncloud_client = None
         self.directories: list[str] = []
-        self.thread_manager = QThreadPool()
+        self.threads = QThreadPool()
 
         self.display("Starting automatic folder configurator script. Please login to Fontys Research Drive with your"
-                     " username and WebDAV password.", append=False)
+                     " username and WebDAV password.", False)
 
         self.load_credentials()
         self.setup_connections()
@@ -158,7 +216,7 @@ class Configurator(Ui_Dialog, QDialog):
 
         self.display(f"Connection established! You are logged in as {self.username}.")
         self.display(f"\nPlease provide a folder configuration spreadsheet file.")
-        
+
         self.line_username.setEnabled(False)
         self.line_password.setEnabled(False)
         self.line_url.setEnabled(False)
@@ -198,11 +256,11 @@ class Configurator(Ui_Dialog, QDialog):
         contains_emails = False
         self.display("\nThe following directories/shares will be created:")
         for directory in self.directories:
-            email_adres = self._get_email(directory)
+            email_adres = _get_email(directory)
             self.display(directory)
             if email_adres is not None:
                 contains_emails = True
-                self.display(f"&nbsp;>>> {email_adres}", append=False)
+                self.display(f">>> {email_adres}")
 
         if contains_emails:
             self.display("\nIf you agree to create these directories and share them, click <b>doit</b>!\n")
@@ -219,37 +277,18 @@ class Configurator(Ui_Dialog, QDialog):
         self.btn_load.setEnabled(False)
         self.box_permission.setEnabled(False)
 
-        self.thread_manager.start(self._doit)
+        worker = ConfiguratorWorker(self.owncloud_client, self.directories, self.permission_level)
+        worker.signals.command_completed.connect(self.display)  # noqa
+        worker.signals.finished.connect(self.unlock_ui)  # noqa
+        self.threads.start(worker)
 
+    @Slot()
+    def unlock_ui(self):
         self.btn_doit.setEnabled(True)
         self.btn_load.setEnabled(True)
         self.box_permission.setEnabled(True)
 
-    def _doit(self):
-        """Create directories and make shares."""
-        permission_level = self.permission_level
-        email = None
-        for directory in self.directories:
-            try:  # owncloud package does not support the webDAV check command, so we'll have to yolo it
-                self.display(f"Creating '{directory}'...")
-                self.owncloud_client.mkdir(directory)
-                self.display("&nbsp;Done!", append=False)
-            except owncloud.HTTPResponseError as e:
-                code = e.status_code
-                self.display(f"<p style='color:red'>&nbsp;Failed with HTTP error {code} "
-                             f"({HTTP_RESPONSES.get(code, '...')}), possibly already exists.</p>", append=False)
-                logger.warning(f"Failed to create directory: {directory}")
-            try:  # make the shares
-                email = self._get_email(directory)
-                if email is not None:
-                    self.display(f">>> Sharing with {email}...")
-                    self.owncloud_client.share_file_with_user(directory, email, perms=permission_level)
-                    self.display("&nbsp;Done!", append=False)
-            except Exception:  # noqa
-                self.display("<p style='color:red'>&nbsp;Sharing failed...</p>", append=False)
-                logger.warning(f"Failed to make share for: {email}")
-        self.display("<br><b>Finished!</b>")
-
+    @Slot(str, bool)
     def display(self, html: str, append: bool = True):
         """Display an HTML message in the text browser."""
         if append:
@@ -257,20 +296,6 @@ class Configurator(Ui_Dialog, QDialog):
         else:
             self.text_browser.insertHtml(html)
         self.text_browser.ensureCursorVisible()  # scroll all the way to the bottom
-
-    @staticmethod
-    def _get_email(string: str) -> Optional[str]:
-        """Extract email from path. Assumes the recipient is the last element."""
-        if "/" not in string:
-            return
-        leafs = string.split("/")
-
-        if not len(leafs) >= 2:
-            return
-
-        leaf = leafs[-2]
-        if is_email(leaf):
-            return leaf
 
     def closeEvent(self, _) -> None:
         """Quit the Python proces after the user clicks exit."""
